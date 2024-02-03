@@ -1,5 +1,6 @@
-from rest_framework import generics
-from rest_framework import permissions
+from django.core.cache import cache
+from django.conf import settings
+from rest_framework import generics, permissions
 from .models import Alert
 from .serializers import AlertSerializer
 
@@ -28,3 +29,18 @@ class AlertListView(generics.ListAPIView):
             queryset = queryset.filter(status=status)
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        # Check if the result is already in the cache
+        cache_key = f'alert_list_{request.user.id}_{request.query_params.get("status", "all")}'
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            return self.get_paginated_response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+
+        # Cache the result
+        cache.set(cache_key, response.data, settings.CACHE_TIMEOUT)
+
+        return response
